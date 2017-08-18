@@ -227,6 +227,10 @@ NAN_METHOD(address_decode) {
     if (!tools::base58::decode_addr(input, prefix, data))
         NanReturnUndefined();
 
+    // Skip integrated payment id if exists
+    if (data.size() > 2 * sizeof(crypto::public_key))
+        data.resize(2 * sizeof(crypto::public_key));
+
     account_public_address adr;
     if (!::serialization::parse_binary(data, adr))
         NanReturnUndefined();
