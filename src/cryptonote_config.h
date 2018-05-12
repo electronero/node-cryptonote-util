@@ -7,10 +7,17 @@
 
 #define BLOCK_MAJOR_VERSION_1                           1
 #define BLOCK_MAJOR_VERSION_2                           8
+#define PEAK_EMISSIONS                                  0
+#define FINAL_SUBSIDY_PER_MINUTE                        0
+// MONEY_SUPPLY - total number coins to be generated
+#define MONEY_SUPPLY_ETN                               ((uint64_t)(2100000000000)) // ETN MONEY_SUPPLY
+#define MONEY_SUPPLY                                   ((uint64_t)(21000000000000)) // after the ETNX fork
+
+#define EMISSION_SPEED_FACTOR_PER_MINUTE                (20)
+#define FINAL_SUBSIDY_PER_MINUTE                        ((uint64_t)0) // 0 * pow(10, 0)
 
 #define COIN                                            ((uint64_t)100) // pow(10, 12)
 #define DEFAULT_FEE                                     ((uint64_t)25) // pow(10, 10)
-
 
 #define DIFFICULTY_TARGET_V1                            60  // seconds - before first fork
 #define DIFFICULTY_WINDOW                               720 // blocks
