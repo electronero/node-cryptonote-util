@@ -27,6 +27,14 @@
 #define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS_V1   DIFFICULTY_TARGET_V1 * CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS
 #define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS_V2   DIFFICULTY_TARGET_V2 * CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS
 
+// coin emission change interval/speed configs
+#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE       240 * 1024    // 240kB, used for emissions
+#define BLOCK_SIZE_GROWTH_FAVORED_ZONE                  ((uint64_t) (CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE * 4))
+#define DIFFICULTY_TARGET                               DIFFICULTY_TARGET_V2  // just alias, used for emissions
+#define COIN_EMISSION_MONTH_INTERVAL                    6  // months to change emission speed
+#define COIN_EMISSION_HEIGHT_INTERVAL                   ((uint64_t) (COIN_EMISSION_MONTH_INTERVAL * (30.4375 * 24 * 3600) / DIFFICULTY_TARGET)) // calculated to # of heights to change emission speed
+#define PEAK_COIN_EMISSION_YEAR                         4
+#define PEAK_COIN_EMISSION_HEIGHT                       ((uint64_t) (((12 * 30.4375 * 24 * 3600)/DIFFICULTY_TARGET) * PEAK_COIN_EMISSION_YEAR)) // = (# of heights emmitted per year) * PEAK_COIN_EMISSION_YEAR
 
-#define CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW            18
+#define CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW            60
 #define CRYPTONOTE_DISPLAY_DECIMAL_POINT                2
