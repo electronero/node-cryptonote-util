@@ -8,7 +8,7 @@
 #define BLOCK_MAJOR_VERSION_1                           1
 #define BLOCK_MAJOR_VERSION_2                           8
 #define PEAK_EMISSIONS                                  0
-#define FINAL_SUBSIDY_PER_MINUTE                        0
+
 // MONEY_SUPPLY - total number coins to be generated
 #define MONEY_SUPPLY_ETN                               ((uint64_t)(2100000000000)) // ETN MONEY_SUPPLY
 #define MONEY_SUPPLY                                   ((uint64_t)(21000000000000)) // after the ETNX fork
