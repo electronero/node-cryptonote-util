@@ -15,7 +15,7 @@
 #define TOKENS                                         ((uint64_t)(20000000000000)) // after the 5% ETNX coin burn
 
 #define EMISSION_SPEED_FACTOR_PER_MINUTE                (20)
-#define FINAL_SUBSIDY_PER_MINUTE                        ((uint64_t)0) // 0 * pow(10, 0)
+#define FINAL_SUBSIDY_PER_MINUTE                        ((uint64_t)100000) // 0 * pow(10, 0)
 
 #define COIN                                            ((uint64_t)100) // pow(10, 12)
 #define DEFAULT_FEE                                     ((uint64_t)25) // pow(10, 10)
@@ -26,10 +26,11 @@
 #define DIFFICULTY_CUT                                  60  // timestamps to cut after sorting
 #define DIFFICULTY_BLOCKS_COUNT                         DIFFICULTY_WINDOW + DIFFICULTY_LAG
 
+#define DIFFICULTY_TARGET                               DIFFICULTY_TARGET_V2
 #define DIFFICULTY_TARGET_V2                            120  // seconds
-#define DIFFICULTY_WINDOW_V2                            60
+#define DIFFICULTY_WINDOW_V2                            70
 #define DIFFICULTY_BLOCKS_COUNT_V2                      DIFFICULTY_WINDOW_V2
-#define CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT_V2           300*2 // https://github.com/zawy12/difficulty-algorithms/issues/3
+#define CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT_V2           DIFFICULTY_TARGET*2 // https://github.com/zawy12/difficulty-algorithms/issues/3
 
 #define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS       1
 #define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS_V1   DIFFICULTY_TARGET_V1 * CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS
