@@ -337,18 +337,36 @@ void blockchain_storage::get_all_known_block_ids(std::list<crypto::hash> &main, 
 //------------------------------------------------------------------
 difficulty_type blockchain_storage::get_difficulty_for_next_block()
 {
+  uint8_t version = BLOCK_MAJOR_VERSION_2;
+  size_t difficulty_blocks_count;
+  uint64_t height = m_blocks.size();
+  // pick DIFFICULTY_BLOCKS_COUNT based on version
+  if (version < 2) {
+    difficulty_blocks_count = DIFFICULTY_BLOCKS_COUNT;
+  } else {
+    difficulty_blocks_count = DIFFICULTY_BLOCKS_COUNT_V2;
+  }
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   std::vector<uint64_t> timestamps;
-  std::vector<difficulty_type> commulative_difficulties;
-  size_t offset = m_blocks.size() - std::min(m_blocks.size(), static_cast<size_t>(DIFFICULTY_BLOCKS_COUNT));
+  std::vector<difficulty_type> difficulties;
+  size_t offset = m_blocks.size() - std::min(m_blocks.size(), static_cast<size_t>(difficulty_blocks_count));
   if(!offset)
     ++offset;//skip genesis block
   for(; offset < m_blocks.size(); offset++)
   {
     timestamps.push_back(m_blocks[offset].bl.timestamp);
-    commulative_difficulties.push_back(m_blocks[offset].cumulative_difficulty);
+    difficulties.push_back(m_blocks[offset].cumulative_difficulty);
   }
-  return next_difficulty(timestamps, commulative_difficulties);
+  size_t target = version < 2 ? DIFFICULTY_TARGET_V1 : DIFFICULTY_TARGET_V2;
+
+  if (version < 2) {
+    return next_difficulty(timestamps, difficulties, target);
+  } else if (version > 2 && version < 9) {
+    return next_difficulty_v2(timestamps, difficulties, target);
+  } else {
+    return next_difficulty_v3(timestamps, difficulties, target);
+  }
+  
 }
 //------------------------------------------------------------------
 bool blockchain_storage::rollback_blockchain_switching(std::list<block>& original_chain, size_t rollback_height)
@@ -439,47 +457,81 @@ bool blockchain_storage::switch_to_alternative_blockchain(std::list<blocks_ext_b
 //------------------------------------------------------------------
 difficulty_type blockchain_storage::get_next_difficulty_for_alternative_chain(const std::list<blocks_ext_by_hash::iterator>& alt_chain, block_extended_info& bei)
 {
+  LOG_PRINT_L3("Blockchain::" << __func__);
   std::vector<uint64_t> timestamps;
-  std::vector<difficulty_type> commulative_difficulties;
-  if(alt_chain.size()< DIFFICULTY_BLOCKS_COUNT)
+  std::vector<difficulty_type> cumulative_difficulties;
+
+  uint8_t version = BLOCK_MAJOR_VERSION_2;
+  size_t difficulty_blocks_count;
+    // pick DIFFICULTY_BLOCKS_COUNT based on version
+  if (version == 1 || version == 10) {
+    difficulty_blocks_count = DIFFICULTY_BLOCKS_COUNT;
+  } else {
+    difficulty_blocks_count = DIFFICULTY_BLOCKS_COUNT_V2;
+  }
+
+  // if the alt chain isn't long enough to calculate the difficulty target
+  // based on its blocks alone, need to get more blocks from the main chain
+  if(alt_chain.size()< difficulty_blocks_count)
   {
     CRITICAL_REGION_LOCAL(m_blockchain_lock);
+
+    // Figure out start and stop offsets for main chain blocks
     size_t main_chain_stop_offset = alt_chain.size() ? alt_chain.front()->second.height : bei.height;
-    size_t main_chain_count = DIFFICULTY_BLOCKS_COUNT - std::min(static_cast<size_t>(DIFFICULTY_BLOCKS_COUNT), alt_chain.size());
+    size_t main_chain_count = difficulty_blocks_count - std::min(static_cast<size_t>(difficulty_blocks_count), alt_chain.size());
     main_chain_count = std::min(main_chain_count, main_chain_stop_offset);
     size_t main_chain_start_offset = main_chain_stop_offset - main_chain_count;
 
     if(!main_chain_start_offset)
       ++main_chain_start_offset; //skip genesis block
+
+    // get difficulties and timestamps from relevant main chain blocks
     for(; main_chain_start_offset < main_chain_stop_offset; ++main_chain_start_offset)
     {
-      timestamps.push_back(m_blocks[main_chain_start_offset].bl.timestamp);
-      commulative_difficulties.push_back(m_blocks[main_chain_start_offset].cumulative_difficulty);
+      timestamps.push_back(m_db->get_block_timestamp(main_chain_start_offset));
+      cumulative_difficulties.push_back(m_db->get_block_cumulative_difficulty(main_chain_start_offset));
     }
 
-    CHECK_AND_ASSERT_MES((alt_chain.size() + timestamps.size()) <= DIFFICULTY_BLOCKS_COUNT, false, "Internal error, alt_chain.size()["<< alt_chain.size()
-                                                                                    << "] + vtimestampsec.size()[" << timestamps.size() << "] NOT <= DIFFICULTY_WINDOW[]" << DIFFICULTY_BLOCKS_COUNT );
-    BOOST_FOREACH(auto it, alt_chain)
+    // make sure we haven't accidentally grabbed too many blocks...maybe don't need this check?
+    CHECK_AND_ASSERT_MES((alt_chain.size() + timestamps.size()) <= difficulty_blocks_count, false, "Internal error, alt_chain.size()[" << alt_chain.size() << "] + vtimestampsec.size()[" << timestamps.size() << "] NOT <= DIFFICULTY_WINDOW[]" << difficulty_blocks_count);
+
+    for (auto it : alt_chain)
     {
       timestamps.push_back(it->second.bl.timestamp);
-      commulative_difficulties.push_back(it->second.cumulative_difficulty);
+      cumulative_difficulties.push_back(it->second.cumulative_difficulty);
     }
-  }else
+  }
+  // if the alt chain is long enough for the difficulty calc, grab difficulties
+  // and timestamps from it alone
+  else
   {
-    timestamps.resize(std::min(alt_chain.size(), static_cast<size_t>(DIFFICULTY_BLOCKS_COUNT)));
-    commulative_difficulties.resize(std::min(alt_chain.size(), static_cast<size_t>(DIFFICULTY_BLOCKS_COUNT)));
+    timestamps.resize(static_cast<size_t>(difficulty_blocks_count));
+    cumulative_difficulties.resize(static_cast<size_t>(difficulty_blocks_count));
     size_t count = 0;
     size_t max_i = timestamps.size()-1;
-    BOOST_REVERSE_FOREACH(auto it, alt_chain)
+    // get difficulties and timestamps from most recent blocks in alt chain
+    for(auto it: boost::adaptors::reverse(alt_chain))
     {
       timestamps[max_i - count] = it->second.bl.timestamp;
-      commulative_difficulties[max_i - count] = it->second.cumulative_difficulty;
+      cumulative_difficulties[max_i - count] = it->second.cumulative_difficulty;
       count++;
-      if(count >= DIFFICULTY_BLOCKS_COUNT)
+      if(count >= difficulty_blocks_count)
         break;
     }
   }
-  return next_difficulty(timestamps, commulative_difficulties);
+
+  // FIXME: This will fail if fork activation heights are subject to voting
+  size_t target = version < 2 ? DIFFICULTY_TARGET_V1 : DIFFICULTY_TARGET_V2;
+
+  // calculate the difficulty target for the block and return it
+    if (version < 2) {
+    return next_difficulty(timestamps, cumulative_difficulties, target);
+  } else if (version > 2 && version < 9) {
+    return next_difficulty_v2(timestamps, cumulative_difficulties, target);
+  } else {
+    return next_difficulty_v3(timestamps, cumulative_difficulties, target);
+  }
+  
 }
 //------------------------------------------------------------------
 bool blockchain_storage::prevalidate_miner_transaction(const block& b, uint64_t height)
@@ -519,12 +571,12 @@ bool blockchain_storage::validate_miner_transaction(const block& b, size_t cumul
     LOG_PRINT_L0("block size " << cumulative_block_size << " is bigger than allowed for this blockchain");
     return false;
   }
-  if(base_reward + fee < money_in_use)
+  if(base_reward + fee < money_in_use && already_generated_coins > 0)
   {
     LOG_ERROR("coinbase transaction spend too much money (" << print_money(money_in_use) << "). Block reward is " << print_money(base_reward + fee) << "(" << print_money(base_reward) << "+" << print_money(fee) << ")");
     return false;
   }
-  if(base_reward + fee != money_in_use)
+  if(base_reward + fee != money_in_use && already_generated_coins > 0)
   {
     LOG_ERROR("coinbase transaction doesn't use full amount of block reward:  spent: "
                             << print_money(money_in_use) << ",  block reward " << print_money(base_reward + fee) << "(" << print_money(base_reward) << "+" << print_money(fee) << ")");
@@ -1613,12 +1665,16 @@ bool blockchain_storage::handle_block_to_main_chain(const block& bl, const crypt
 //------------------------------------------------------------------
 bool blockchain_storage::update_next_comulative_size_limit()
 {
+  uint64_t full_reward_zone = get_min_block_size(get_current_hard_fork_version());
+
+  LOG_PRINT_L3("Blockchain::" << __func__);
   std::vector<size_t> sz;
   get_last_n_blocks_sizes(sz, CRYPTONOTE_REWARD_BLOCKS_WINDOW);
 
-  uint64_t median = misc_utils::median(sz);
-  if(median <= CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE)
-    median = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+  uint64_t median = epee::misc_utils::median(sz);
+  m_current_block_cumul_sz_median = median;
+  if(median <= full_reward_zone)
+    median = full_reward_zone;
 
   m_current_block_cumul_sz_limit = median*2;
   return true;
